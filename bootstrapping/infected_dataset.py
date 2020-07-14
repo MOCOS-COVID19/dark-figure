@@ -40,27 +40,34 @@ def get_known_secondary_infected_count(patient_data):
     return patient_data.min_household_size.sum() - len(patient_data.index)
 
 
-def get_known_secondary_infected_age_grouped(patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
+def get_count_by_field(fields, patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
                                              max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE,
                                              age_ranges=(40, 60, 80)):
     infected_by_age_group = defaultdict(int)
     unknown_age = 0
     patient_data = read_clean_patient_data(patient_data_path, max_min_household_size)
-    for stuff in patient_data.later_ages_in_address:
-        try:
-            ages = ast.literal_eval(stuff)
-        except ValueError:
-            ages = []
-            for token in stuff[1:-1].split(', '):
-                if token == 'nan':
-                    unknown_age += 1
-                else:
-                    ages.append(float(token))
-        for current_age in ages:
-            group_id = bisect_right(age_ranges, current_age)
-            infected_by_age_group[group_id] += 1
+    for field in fields:
+        for stuff in patient_data[field]:
+            try:
+                ages = ast.literal_eval(stuff)
+            except ValueError:
+                ages = []
+                for token in stuff[1:-1].split(', '):
+                    if token == 'nan':
+                        unknown_age += 1
+                    else:
+                        ages.append(float(token))
+            for current_age in ages:
+                group_id = bisect_right(age_ranges, current_age)
+                infected_by_age_group[group_id] += 1
 
     return infected_by_age_group, unknown_age
+
+
+def get_known_secondary_infected_age_grouped(patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
+                                             max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE,
+                                             age_ranges=(40, 60, 80)):
+    return get_count_by_field(['later_ages_in_address'], patient_data_path, max_min_household_size, age_ranges)
 
 
 def get_index_cases_grouped_by_age(index_cases):
@@ -100,16 +107,18 @@ def get_elderly_patient_data(index_cases, cutoff_age=90):
     return elderly_grouped
 
 
+def get_severe_10_age_grouped(patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
+                  max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE, age_ranges=(40,60,80)):
+    return get_count_by_field(['later_ages_in_address_severe10', 'later_ages_in_address_deaths'],
+                              patient_data_path, max_min_household_size, age_ranges)
+
+
+def get_severe_14_age_grouped(patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
+                  max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE, age_ranges=(40,60,80)):
+    return get_count_by_field(['later_ages_in_address_severe14', 'later_ages_in_address_deaths'],
+                              patient_data_path, max_min_household_size, age_ranges)
+
+
 if __name__ == '__main__':
-    df = get_patient_data()
+    df = read_clean_patient_data()
     print(df.columns)
-    print(df.head())
-    df2 = get_elderly_patient_data(df)
-    print(df2.columns)
-    print(df2.head())
-    df2['number_of_cases'] = df2['voy'].apply(lambda x: len(x))
-    sources_dict = df2[df2.min_household_size == 2][['age', 'gender', 'number_of_cases']] \
-        .set_index(['gender', 'age']).to_dict()['number_of_cases']
-    for (gender, age), count in sources_dict.items():
-        print(age, gender, count)
-    print(get_known_secondary_infected_age_grouped())

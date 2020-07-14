@@ -6,11 +6,13 @@ from datetime import datetime
 import time
 
 import numpy as np
+import pandas as pd
 from scipy.stats import binom
 from tqdm import tqdm
 
 from bootstrapping.infected_dataset import get_patient_data, get_elderly_patient_data, \
-    get_index_cases_grouped_by_age
+    get_index_cases_grouped_by_age, get_known_secondary_infected_age_grouped, get_severe_10_age_grouped, \
+    get_severe_14_age_grouped
 from bootstrapping.nsp2011 import get_data_for_voy, get_data, get_people_in_households, \
     get_households_within_habitants_range
 from bootstrapping.settings import *
@@ -116,14 +118,14 @@ def process_results(results, num_trials):
 
 def get_beta(y, ag_severe_cases, conf_level, severness_rate_lb, severness_rate_ub, epsilon):
     current_severness = (severness_rate_lb + severness_rate_ub) / 2
-    # print(f'Checking for {current_severness}')
+    print(f'Checking for {current_severness}')
     num_trials = len(y)  # 10000
     x = np.zeros((num_trials,))
     for i, y_i in enumerate(y):
         x[i] = binom.rvs(y_i, current_severness, loc=0, size=1, random_state=None)
     occurrences = np.count_nonzero(x >= ag_severe_cases)
     q = occurrences / num_trials
-    # print(f'q = {q}')
+    print(f'q = {q}')
     # error within limit
     if 0 < q - conf_level < epsilon:
         return current_severness
@@ -135,16 +137,16 @@ def get_beta(y, ag_severe_cases, conf_level, severness_rate_lb, severness_rate_u
 
 def get_betas(age_groups_ids, y, severe_cases, conf_level, severness_rate_lb, severness_rate_ub, epsilon):
     betas = {}
-    for age_group_id in age_groups_ids:
-        print(f'Checking for age group {age_group_id}')
+
+    for age_group_id in tqdm(age_groups_ids):
         ag_severe_cases = severe_cases[age_group_id]
-        betas[age_group_id] = get_beta(y[age_group_id], ag_severe_cases, conf_level,
+        betas[age_group_id] = get_beta(y[(MALE_IDX, age_group_id)] + y[(FEMALE_IDX, age_group_id)],
+                                       ag_severe_cases, conf_level,
                                        severness_rate_lb, severness_rate_ub, epsilon)
     return betas
 
 
-def get_alpha(y, ag_severe_cases, conf_level, severness_rate_lb, severness_rate_ub, epsilon):
-    num_trials = len(y)
+def get_alpha(y, ag_severe_cases, conf_level, severness_rate_lb, severness_rate_ub, epsilon, num_trials):
     current_severness = (severness_rate_lb + severness_rate_ub) / 2
     # print(f'Checking for {current_severness}')
     # print(f'num_trials = {num_trials}')  # 10000
@@ -158,18 +160,17 @@ def get_alpha(y, ag_severe_cases, conf_level, severness_rate_lb, severness_rate_
     if 0 < q - conf_level < epsilon:
         return current_severness
     if q < conf_level:
-        return get_alpha(y, ag_severe_cases, conf_level, severness_rate_lb, current_severness, epsilon)
-    return get_alpha(y, ag_severe_cases, conf_level, current_severness, severness_rate_ub, epsilon)
+        return get_alpha(y, ag_severe_cases, conf_level, severness_rate_lb, current_severness, epsilon, num_trials)
+    return get_alpha(y, ag_severe_cases, conf_level, current_severness, severness_rate_ub, epsilon, num_trials)
 
 
 def get_alphas(age_groups_ids, observed_cases, severe_cases, conf_level, severness_rate_lb,
-               severness_rate_ub, epsilon):
+               severness_rate_ub, epsilon, num_trials=10000):
     alphas = {}
-    for age_group_id in age_groups_ids:
-        print(f'Checking for age group {age_group_id}')
+    for age_group_id in tqdm(age_groups_ids):
         ag_severe_cases = severe_cases[age_group_id]
         alphas[age_group_id] = get_alpha(observed_cases[age_group_id], ag_severe_cases, conf_level,
-                                         severness_rate_lb, severness_rate_ub, epsilon)
+                                         severness_rate_lb, severness_rate_ub, epsilon, num_trials)
     return alphas
 
 
@@ -206,13 +207,16 @@ def get_alpha_beta(interim_file_path):
     with interim_file_path.open('rb') as handle:
         interim = pickle.load(handle)
 
-    severe_cases_14 = {0: 45, 1: 84, 2: 103, 3: 45}
-    severe_cases_10 = {0: 80, 1: 107, 2: 132, 3: 48}
-    observed_cases = {0: 1807, 1: 1018, 2: 589, 3: 139}
+    severe_cases_14 = get_severe_14_age_grouped()[0]
+    print(severe_cases_14)
+    severe_cases_10 = get_severe_10_age_grouped()[0]
+    print(severe_cases_10)
+    observed_cases = get_known_secondary_infected_age_grouped()[0]
+    print(observed_cases)
 
     age_groups_ids = [0, 1, 2, 3]
     severness_rate_lb = 0.0
-    severness_rate_ub = 0.1
+    severness_rate_ub = 1.0
     conf_level = 0.01
     epsilon = 0.001
     betas10 = get_betas(age_groups_ids, interim, severe_cases_10, conf_level, severness_rate_lb, severness_rate_ub,
@@ -251,9 +255,16 @@ def get_alpha_beta(interim_file_path):
     with alphas_file_path.open('wb') as handle:
         pickle.dump(alphas_14, handle)
 
+    output = pd.DataFrame(data={'observed': observed_cases, 'severe10': severe_cases_10, 'severe14': severe_cases_14,
+                                'alpha10': alphas_10, 'alpha14': alphas_14,
+                                'beta10': betas10, 'beta14': betas14}).T
+    print(output)
+    with (RESULTS_DIR / f'{interim_file_path.stem}_alpha_beta_df.pickle').open('wb') as handle:
+        pickle.dump(output, handle)
+
 
 def age_distribution(num_trials=DEFAULT_NUM_TRIALS):
-    age_ranges = list(range(0, 101))
+    age_ranges = list(range(1, 101))
     patient_data = get_patient_data()
     elderly_data = get_elderly_patient_data(patient_data)
     patient_data = get_index_cases_grouped_by_age(patient_data)
@@ -266,9 +277,15 @@ def age_distribution(num_trials=DEFAULT_NUM_TRIALS):
     print(str(interim_file_path))
     with interim_file_path.open('wb') as handle:
         pickle.dump(interim, handle)
+
+    pd.DataFrame(data=interim).to_csv(str(RESULTS_DIR / f'{interim_file_path.stem}.csv'))
     return interim_file_path
 
 
 if __name__ == '__main__':
-    dark_paper()
+    # dark_paper()
     # age_distribution()
+    file_path = RESULTS_DIR / '202007102357_10000_406080_susceptibles.pickle'
+    get_alpha_beta(file_path)
+
+

@@ -9,7 +9,8 @@ from typing import Any
 from bootstrapping.nsp2011 import get_households_within_habitants_range, get_data, get_data_for_voy, \
     get_people_in_households
 from bootstrapping.infected_dataset import (get_elderly_patient_data, get_patient_data, get_index_cases_grouped_by_age,
-                                            get_known_secondary_infected_count)
+                                            get_known_secondary_infected_count,
+                                            get_known_secondary_infected_age_grouped)
 from bootstrapping.settings import *
 from operator import itemgetter
 
@@ -317,9 +318,10 @@ class AttackRate:
         return means
 
 
-def attack_rate_calculations():
+def attack_rate_calculations(patient_data_file):
+
     calc = AttackRate()
-    index_cases = get_patient_data()
+    index_cases = get_patient_data(patient_data_path=patient_data_file)
     print(f'Number of index cases: {len(index_cases.index)}')
     index_cases_grouped_by_age = get_index_cases_grouped_by_age(index_cases)
     elderly_grouped = get_elderly_patient_data(index_cases)
@@ -347,8 +349,23 @@ def attack_rate_calculations():
     means = calc.get_means(sampled_households)
     print('Means of infected: ', means)
     print('Sum of means: ', sum(means))
+    print('Known secondary infected (age-grouped)', get_known_secondary_infected_age_grouped(
+        patient_data_path=patient_data_file))
 
 
 if __name__ == '__main__':
 
-    attack_rate_calculations()
+    # attack_rate_calculations(str(data_dir / 'addresses_ages_rev3_20200616.csv'))
+
+    age_groups = (20, 40, 60, 80)
+    calc = AttackRate()
+    with (RESULTS_DIR / 'sampled_households_secondary_202007140004.pickle').open('rb') as handle:
+        sampled_households = pickle.load(handle)
+    conf_intervals = calc.get_infected_confidence_interval(sampled_households, age_groups)
+    print('Confidence intervals: ', conf_intervals)
+    means = calc.get_means(sampled_households, age_groups)
+    print('Means of infected: ', means)
+    print('Sum of means: ', sum(means))
+    print('Known secondary infected (age-grouped)',
+          get_known_secondary_infected_age_grouped(age_ranges=age_groups,
+                                                   patient_data_path=str(data_dir / 'addresses_ages_rev3_20200616.csv')))
