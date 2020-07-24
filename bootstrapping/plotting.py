@@ -132,3 +132,13 @@ def plotting2():
     plt.subplots_adjust(top=1, bottom=0.15)
     plt.savefig('susceptibles_distplot.png')
     plt.show()
+
+
+def plot_g(G, result_image_file):
+    plt.figure(dpi=300)
+    plt.plot(G['lambda'], G['G'], label='$G(\lambda)$')
+    plt.xlabel('$\lambda$')
+    plt.ylabel('Fraction of infected')
+    plt.legend()
+    plt.savefig(result_image_file)
+    plt.show()

@@ -12,6 +12,7 @@ from bootstrapping.infected_dataset import (get_elderly_patient_data, get_patien
                                             get_known_secondary_infected_count,
                                             get_known_secondary_infected_age_grouped)
 from bootstrapping.settings import *
+from bootstrapping.plotting import plot_g
 from operator import itemgetter
 
 
@@ -42,8 +43,11 @@ class AttackRate:
         return np.logspace(-10, -2, base=2, num=50)  # more dense at the beginning 0 to 0.15
 
     @staticmethod
-    def get_mu_k_lambda():
-        mu_k_lambda = pd.read_csv(str(data_dir / 'mu_of_alpha.csv'), index_col=[0])
+    def get_mu_k_lambda(full_range=False):
+        if full_range:
+            mu_k_lambda = pd.read_csv(str(data_dir / 'mu_of_alpha_full_range.csv'), index_col=[0])
+        else:
+            mu_k_lambda = pd.read_csv(str(data_dir / 'mu_of_alpha.csv'), index_col=[0])
         mu_k_lambda.columns.name = 'lambda'
         return mu_k_lambda
 
@@ -317,6 +321,25 @@ class AttackRate:
         means.append(np.mean(np.sum(people_by_age[age_groups[-1]:], axis=0)))
         return means
 
+    def plot_g_function(self, g_values):
+        plot_path = str(RESULTS_DIR / f'G_of_lambda_{self.dt}.png')
+        plot_g(g_values, plot_path)
+
+
+def get_g_function_full_range():
+    calc = AttackRate()
+    index_cases = get_patient_data()
+    index_cases_grouped_by_age = get_index_cases_grouped_by_age(index_cases)
+    elderly_grouped = get_elderly_patient_data(index_cases)
+    mu_k_lambda = calc.get_mu_k_lambda(full_range=True)
+    p, num_cases = calc.calculate_probabilities_of_household_size(index_cases_grouped_by_age, elderly_grouped)
+    mu_bar = calc.get_mu_bar(p, mu_k_lambda)
+    ei_df = calc.get_ei(mu_bar, num_cases)
+    bar_h = calc.get_bar_h(p)
+    EN_asterisk = calc.get_EN_asterisk(bar_h, num_cases)
+    g_df = calc.get_g_function(ei_df, EN_asterisk)
+    calc.plot_g_function(g_df)
+
 
 def attack_rate_calculations(patient_data_file):
 
@@ -375,11 +398,11 @@ def lambda_reverse_engineering(lambda_hat, num_trials):
 
 
 if __name__ == '__main__':
-    calc = AttackRate()
+    """calc = AttackRate()
     sampled_households = calc.load_pickles(RESULTS_DIR / 'sampled_households_secondary_202007240956.pickle')
     conf_intervals = calc.get_infected_confidence_interval(sampled_households, age_groups=(20,40,60,80))
     print('Confidence intervals: ', conf_intervals)
     means = calc.get_means(sampled_households, age_groups=(20,40,60,80))
-    print('Means of infected: ', means)
-
+    print('Means of infected: ', means)"""
+    get_g_function_full_range()
 
