@@ -18,8 +18,8 @@ from operator import itemgetter
 class AttackRate:
 
     def __init__(self, max_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE) -> None:
-        dt = datetime.now().strftime('%Y%m%d%H%M')
-        self.pickle_file_pattern = f'{{}}_{dt}.pickle'
+        self.dt = datetime.now().strftime('%Y%m%d%H%M')
+        self.pickle_file_pattern = f'{{}}_{self.dt}.pickle'
         self.max_household_size = max_household_size
         self.K = self.get_K()
         self.lambdas = self.get_lambdas()
@@ -353,19 +353,33 @@ def attack_rate_calculations(patient_data_file):
         patient_data_path=patient_data_file))
 
 
-if __name__ == '__main__':
-
-    # attack_rate_calculations(str(data_dir / 'addresses_ages_rev3_20200616.csv'))
-
-    age_groups = (20, 40, 60, 80)
+def lambda_reverse_engineering(lambda_hat, num_trials):
     calc = AttackRate()
-    with (RESULTS_DIR / 'sampled_households_secondary_202007140004.pickle').open('rb') as handle:
-        sampled_households = pickle.load(handle)
-    conf_intervals = calc.get_infected_confidence_interval(sampled_households, age_groups)
+    index_cases = get_patient_data()
+    print(f'Number of index cases: {len(index_cases.index)}')
+    index_cases_grouped_by_age = get_index_cases_grouped_by_age(index_cases)
+    elderly_grouped = get_elderly_patient_data(index_cases)
+    prob_table, expected_infected = calc.get_probabilities_of_infection(lambda_hat)
+    sampled_households, wielkosci_domkow = calc.sample_household(
+        index_cases_grouped_by_age,
+        elderly_grouped,
+        prob_table, num_trials=num_trials)
+    print(f'Number of drawn households {sum(wielkosci_domkow[0, :])} should be equal to '
+          f'the number of index cases  {len(index_cases.index)}')
+    conf_intervals = calc.get_infected_confidence_interval(sampled_households)
     print('Confidence intervals: ', conf_intervals)
-    means = calc.get_means(sampled_households, age_groups)
+    means = calc.get_means(sampled_households)
     print('Means of infected: ', means)
     print('Sum of means: ', sum(means))
-    print('Known secondary infected (age-grouped)',
-          get_known_secondary_infected_age_grouped(age_ranges=age_groups,
-                                                   patient_data_path=str(data_dir / 'addresses_ages_rev3_20200616.csv')))
+    print('Known secondary infected (age-grouped)', get_known_secondary_infected_age_grouped())
+
+
+if __name__ == '__main__':
+    calc = AttackRate()
+    sampled_households = calc.load_pickles(RESULTS_DIR / 'sampled_households_secondary_202007240956.pickle')
+    conf_intervals = calc.get_infected_confidence_interval(sampled_households, age_groups=(20,40,60,80))
+    print('Confidence intervals: ', conf_intervals)
+    means = calc.get_means(sampled_households, age_groups=(20,40,60,80))
+    print('Means of infected: ', means)
+
+
