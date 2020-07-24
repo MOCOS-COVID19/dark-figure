@@ -118,14 +118,14 @@ def process_results(results, num_trials):
 
 def get_beta(y, ag_severe_cases, conf_level, severness_rate_lb, severness_rate_ub, epsilon):
     current_severness = (severness_rate_lb + severness_rate_ub) / 2
-    print(f'Checking for {current_severness}')
+    # print(f'Checking for {current_severness}')
     num_trials = len(y)  # 10000
     x = np.zeros((num_trials,))
     for i, y_i in enumerate(y):
         x[i] = binom.rvs(y_i, current_severness, loc=0, size=1, random_state=None)
     occurrences = np.count_nonzero(x >= ag_severe_cases)
     q = occurrences / num_trials
-    print(f'q = {q}')
+    # print(f'q = {q}')
     # error within limit
     if 0 < q - conf_level < epsilon:
         return current_severness
@@ -208,11 +208,11 @@ def get_alpha_beta(interim_file_path):
         interim = pickle.load(handle)
 
     severe_cases_14 = get_severe_14_age_grouped()[0]
-    print(severe_cases_14)
+    print('Severe cases 14', severe_cases_14)
     severe_cases_10 = get_severe_10_age_grouped()[0]
-    print(severe_cases_10)
+    print('Severe cases 10', severe_cases_10)
     observed_cases = get_known_secondary_infected_age_grouped()[0]
-    print(observed_cases)
+    print('Observed cases', observed_cases)
 
     age_groups_ids = [0, 1, 2, 3]
     severness_rate_lb = 0.0
@@ -239,6 +239,7 @@ def get_alpha_beta(interim_file_path):
 
     severness_rate_lb = 0.0
     severness_rate_ub = 0.8
+    conf_level = 0.99
     alphas_10 = get_alphas(age_groups_ids, observed_cases, severe_cases_10, conf_level, severness_rate_lb,
                            severness_rate_ub, epsilon)
     print('Alpha 10-day')
@@ -258,6 +259,7 @@ def get_alpha_beta(interim_file_path):
     output = pd.DataFrame(data={'observed': observed_cases, 'severe10': severe_cases_10, 'severe14': severe_cases_14,
                                 'alpha10': alphas_10, 'alpha14': alphas_14,
                                 'beta10': betas10, 'beta14': betas14}).T
+    output = output[[0, 1, 2, 3]]
     print(output)
     with (RESULTS_DIR / f'{interim_file_path.stem}_alpha_beta_df.pickle').open('wb') as handle:
         pickle.dump(output, handle)
