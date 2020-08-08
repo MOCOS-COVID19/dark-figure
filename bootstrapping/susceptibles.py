@@ -140,7 +140,8 @@ def get_betas(age_groups_ids, y, severe_cases, conf_level, severness_rate_lb, se
 
     for age_group_id in tqdm(age_groups_ids):
         ag_severe_cases = severe_cases[age_group_id]
-        betas[age_group_id] = get_beta(y[(MALE_IDX, age_group_id)] + y[(FEMALE_IDX, age_group_id)],
+        y_total = [y1+ y2 for y1, y2 in zip (y[(MALE_IDX, age_group_id)], y[(FEMALE_IDX, age_group_id)])]
+        betas[age_group_id] = get_beta(y_total,
                                        ag_severe_cases, conf_level,
                                        severness_rate_lb, severness_rate_ub, epsilon)
     return betas
@@ -203,7 +204,6 @@ def dark_paper(num_trials=DEFAULT_NUM_TRIALS):
 
 
 def get_alpha_beta(interim_file_path):
-
     with interim_file_path.open('rb') as handle:
         interim = pickle.load(handle)
 
@@ -217,48 +217,90 @@ def get_alpha_beta(interim_file_path):
     age_groups_ids = [0, 1, 2, 3]
     severness_rate_lb = 0.0
     severness_rate_ub = 1.0
-    conf_level = 0.01
+    conf_level = 0.99
     epsilon = 0.001
-    betas10 = get_betas(age_groups_ids, interim, severe_cases_10, conf_level, severness_rate_lb, severness_rate_ub,
-                        epsilon)
+    betas10_upper = get_betas(age_groups_ids, interim, severe_cases_10, conf_level, severness_rate_lb,
+                              severness_rate_ub,
+                              epsilon)
     print('Beta 10-day')
-    print(betas10)
-    betas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_betas10.pickle'
+    print(betas10_upper)
+    betas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_{conf_level}_betas10.pickle'
     print(betas_file_path)
     with betas_file_path.open('wb') as handle:
-        pickle.dump(betas10, handle)
+        pickle.dump(betas10_upper, handle)
 
-    betas14 = get_betas(age_groups_ids, interim, severe_cases_14, conf_level, severness_rate_lb, severness_rate_ub,
-                        epsilon)
+    betas14_upper = get_betas(age_groups_ids, interim, severe_cases_14, conf_level, severness_rate_lb,
+                              severness_rate_ub,
+                              epsilon)
     print('Beta 14-day')
-    print(betas14)
-    betas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_betas14.pickle'
+    print(betas14_upper)
+    betas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_{conf_level}_betas14.pickle'
     print(betas_file_path)
     with betas_file_path.open('wb') as handle:
-        pickle.dump(betas14, handle)
+        pickle.dump(betas14_upper, handle)
+
+    conf_level = 0.01
+    betas10_lower = get_betas(age_groups_ids, interim, severe_cases_10, conf_level, severness_rate_lb,
+                              severness_rate_ub,
+                              epsilon)
+    print('Beta 10-day')
+    print(betas10_lower)
+    betas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_{conf_level}_betas10.pickle'
+    print(betas_file_path)
+    with betas_file_path.open('wb') as handle:
+        pickle.dump(betas10_lower, handle)
+
+    betas14_lower = get_betas(age_groups_ids, interim, severe_cases_14, conf_level, severness_rate_lb,
+                              severness_rate_ub,
+                              epsilon)
+    print('Beta 14-day')
+    print(betas14_lower)
+    betas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_{conf_level}_betas14.pickle'
+    print(betas_file_path)
+    with betas_file_path.open('wb') as handle:
+        pickle.dump(betas14_lower, handle)
 
     severness_rate_lb = 0.0
     severness_rate_ub = 0.8
-    conf_level = 0.99
-    alphas_10 = get_alphas(age_groups_ids, observed_cases, severe_cases_10, conf_level, severness_rate_lb,
-                           severness_rate_ub, epsilon)
+    conf_level = 0.01
+    alphas_10_lower = get_alphas(age_groups_ids, observed_cases, severe_cases_10, conf_level, severness_rate_lb,
+                                 severness_rate_ub, epsilon)
     print('Alpha 10-day')
-    print(alphas_10)
-    alphas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_alphas10.pickle'
+    print(alphas_10_lower)
+    alphas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_{conf_level}_alphas10.pickle'
     with alphas_file_path.open('wb') as handle:
-        pickle.dump(alphas_10, handle)
+        pickle.dump(alphas_10_lower, handle)
 
-    alphas_14 = get_alphas(age_groups_ids, observed_cases, severe_cases_14, conf_level, severness_rate_lb,
-                           severness_rate_ub, epsilon)
+    alphas_14_lower = get_alphas(age_groups_ids, observed_cases, severe_cases_14, conf_level, severness_rate_lb,
+                                 severness_rate_ub, epsilon)
     print('Alpha 14-day')
-    print(alphas_14)
-    alphas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_alphas14.pickle'
+    print(alphas_14_lower)
+    alphas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_{conf_level}_alphas14.pickle'
     with alphas_file_path.open('wb') as handle:
-        pickle.dump(alphas_14, handle)
+        pickle.dump(alphas_14_lower, handle)
+
+    conf_level = 0.99
+    alphas_10_upper = get_alphas(age_groups_ids, observed_cases, severe_cases_10, conf_level, severness_rate_lb,
+                                 severness_rate_ub, epsilon)
+    print('Alpha 10-day')
+    print(alphas_10_upper)
+    alphas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_{conf_level}_alphas10.pickle'
+    with alphas_file_path.open('wb') as handle:
+        pickle.dump(alphas_10_upper, handle)
+
+    alphas_14_upper = get_alphas(age_groups_ids, observed_cases, severe_cases_14, conf_level, severness_rate_lb,
+                                 severness_rate_ub, epsilon)
+    print('Alpha 14-day')
+    print(alphas_14_upper)
+    alphas_file_path = RESULTS_DIR / f'{interim_file_path.stem}_{conf_level}_alphas14.pickle'
+    with alphas_file_path.open('wb') as handle:
+        pickle.dump(alphas_14_upper, handle)
 
     output = pd.DataFrame(data={'observed': observed_cases, 'severe10': severe_cases_10, 'severe14': severe_cases_14,
-                                'alpha10': alphas_10, 'alpha14': alphas_14,
-                                'beta10': betas10, 'beta14': betas14}).T
+                                'alpha10 0.01': alphas_10_lower, 'alpha10 0.99': alphas_10_upper,
+                                'alpha14 0.01': alphas_14_lower, 'alpha14 0.99': alphas_14_upper,
+                                'beta10 0.01': betas10_lower, 'beta10 0.99': betas10_upper,
+                                'beta14 0.01': betas14_lower, 'beta14 0.99': betas14_upper}).T
     output = output[[0, 1, 2, 3]]
     print(output)
     with (RESULTS_DIR / f'{interim_file_path.stem}_alpha_beta_df.pickle').open('wb') as handle:
@@ -289,5 +331,3 @@ if __name__ == '__main__':
     # age_distribution()
     file_path = RESULTS_DIR / '202007102357_10000_406080_susceptibles.pickle'
     get_alpha_beta(file_path)
-
-

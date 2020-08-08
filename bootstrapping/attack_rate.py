@@ -23,7 +23,7 @@ class AttackRate:
         self.pickle_file_pattern = f'{{}}_{self.dt}.pickle'
         self.max_household_size = max_household_size
         self.K = self.get_K()
-        self.lambdas = self.get_lambdas()
+        # self.lambdas = self.get_lambdas()
 
     def dump_pickles(self, data: Any, file_part: str) -> None:
         with (RESULTS_DIR / self.pickle_file_pattern.format(file_part)).open('wb') as handle:
@@ -38,9 +38,9 @@ class AttackRate:
     def get_K(max_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE):
         return np.array(list(range(max_household_size - 1)))
 
-    @staticmethod
-    def get_lambdas():
-        return np.logspace(-10, -2, base=2, num=50)  # more dense at the beginning 0 to 0.15
+    # @staticmethod
+    # def get_lambdas():
+    #     return np.logspace(-10, -2, base=2, num=50)  # more dense at the beginning 0 to 0.15
 
     @staticmethod
     def get_mu_k_lambda(full_range=False):
@@ -113,10 +113,10 @@ class AttackRate:
         self.dump_pickles(num_cases, 'num_cases')
         return occurrences, num_cases
 
-    def get_mu_bar(self, probabilities, mu_k_lambda):
+    def get_mu_bar(self, probabilities, mu_k_lambda, lambdas):
         # mu_k_lambda - dataframe, lambdas x household size (K-1)
         # probabilities - matrix (voy, age, gender, min household size, household size)
-        lambdas_count = len(self.lambdas)
+        lambdas_count = len(lambdas)
         voy_count = probabilities.shape[0]
         age_count = probabilities.shape[1]
         gender_count = probabilities.shape[2]
@@ -124,7 +124,7 @@ class AttackRate:
 
         mu_bar = np.zeros((lambdas_count, voy_count, age_count, gender_count, household_size_count))
 
-        for lambda_idx, _lambda in enumerate(self.lambdas):
+        for lambda_idx, _lambda in enumerate(lambdas):
             for voy_idx in range(voy_count):
                 for age_idx in range(age_count):
                     for gender_idx in range(gender_count):
@@ -194,9 +194,9 @@ class AttackRate:
         self.dump_pickles(bar_h, 'bar_h')
         return bar_h
 
-    def get_ei(self, mu_bar, num_cases):
+    def get_ei(self, mu_bar, num_cases, lambdas):
         EI = dict()
-        for idx, _lambda in enumerate(self.lambdas):
+        for idx, _lambda in enumerate(lambdas):
             EI[_lambda] = np.sum(np.multiply(mu_bar[idx, :, :, :, :], num_cases))
         ei_df = pd.Series(data=EI).reset_index().rename(columns={'index': 'lambda', 0: 'EI'})
         self.dump_pickles(ei_df, 'ei_df')
@@ -332,13 +332,15 @@ def get_g_function_full_range():
     index_cases_grouped_by_age = get_index_cases_grouped_by_age(index_cases)
     elderly_grouped = get_elderly_patient_data(index_cases)
     mu_k_lambda = calc.get_mu_k_lambda(full_range=True)
+    lambdas = list(mu_k_lambda.columns)
     p, num_cases = calc.calculate_probabilities_of_household_size(index_cases_grouped_by_age, elderly_grouped)
-    mu_bar = calc.get_mu_bar(p, mu_k_lambda)
-    ei_df = calc.get_ei(mu_bar, num_cases)
+    mu_bar = calc.get_mu_bar(p, mu_k_lambda, lambdas)
+    ei_df = calc.get_ei(mu_bar, num_cases, lambdas)
     bar_h = calc.get_bar_h(p)
     EN_asterisk = calc.get_EN_asterisk(bar_h, num_cases)
     g_df = calc.get_g_function(ei_df, EN_asterisk)
     calc.plot_g_function(g_df)
+    return g_df
 
 
 def attack_rate_calculations(patient_data_file):
@@ -349,9 +351,10 @@ def attack_rate_calculations(patient_data_file):
     index_cases_grouped_by_age = get_index_cases_grouped_by_age(index_cases)
     elderly_grouped = get_elderly_patient_data(index_cases)
     mu_k_lambda = calc.get_mu_k_lambda()
+    lambdas = list(mu_k_lambda.columns)
     p, num_cases = calc.calculate_probabilities_of_household_size(index_cases_grouped_by_age, elderly_grouped)
-    mu_bar = calc.get_mu_bar(p, mu_k_lambda)
-    ei_df = calc.get_ei(mu_bar, num_cases)
+    mu_bar = calc.get_mu_bar(p, mu_k_lambda, lambdas)
+    ei_df = calc.get_ei(mu_bar, num_cases, lambdas)
     bar_h = calc.get_bar_h(p)
     EN_asterisk = calc.get_EN_asterisk(bar_h, num_cases)
     print(f'Expected number of susceptibles {EN_asterisk}')

@@ -136,9 +136,10 @@ def plotting2():
 
 def plot_g(G, result_image_file):
     plt.figure(dpi=300)
+    G['lambda'] = G['lambda'].astype(float)
     plt.plot(G['lambda'], G['G'], label='$G(\lambda)$')
     plt.xlabel('$\lambda$')
     plt.ylabel('Fraction of infected')
+    plt.xticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
     plt.legend()
     plt.savefig(result_image_file)
-    plt.show()
