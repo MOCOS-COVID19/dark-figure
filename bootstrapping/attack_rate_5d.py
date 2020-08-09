@@ -84,88 +84,31 @@ def sample_households_for_index_cases(data, elderly_data, household_size_max=15,
     return index_cases_ages, sampled_households
 
 
-def infect(data, elderly_data, prob_table, household_size_max=15, num_trials=10000, cutoff_age=90):
-    all_people, all_households = get_data()
+def get_probabilities_of_infection(l1, l2, l3, l4, l5, icag, n1, n2, n3, n4, n5):
+    return 0.0625, 0.0625, 0.125, 0.25, 0.5
 
-    max_age_in_census = max(all_people.keys(), key=itemgetter(1))[1]
-    output = np.zeros((num_trials, max_age_in_census + 1))
 
-    K = np.arange(0, 14)  # self.K
-    sampled_household_sizes = np.zeros((num_trials, len(K)))
+def infect(index_cases_ages, sampled_households, lambda_hat, num_trials=10000):
+    #
 
-    check_index_cases_count = 0
-    for n in tqdm(elderly_data.min_household_size.unique()):
+    # sampled_households = np.zeros((num_trials, num_index_cases, num_age_groups))
+    #     index_cases_ages = np.zeros(num_index_cases)
 
-        households = get_households_within_habitants_range(all_households, n, household_size_max)
-        people = get_people_in_households(all_people, households)
+    lambda_hat = lambda_hat.to_list()
 
-        for j, row in elderly_data[elderly_data.min_household_size == n].iterrows():
-            age = row.age
-            gender = row.gender
-            voyvodships = row.voy
-            number_of_cases = len(voyvodships)
-            check_index_cases_count += number_of_cases
+    for i in range(num_trials):
+        for age_group, household in zip(index_cases_ages, sampled_households[i]):
+            p = get_probabilities_of_infection(*lambda_hat, age_group, *household.to_list())
 
-            for i in range(num_trials):
-                household_indices = random.choices(people[(gender, age)], k=number_of_cases)
-                assert number_of_cases == len(household_indices)
+            k = np.random.choice(K, p=prob_table[len(h) - 2, :])
 
-                for household_index in household_indices:
-                    h = households[household_index]
-                    sampled_household_sizes[i, len(h) - 1] += 1
-                    if len(h) == 1:
-                        continue
-                    # if len(h) == 2 then sample from K with probability prob_table[0,:]
-                    k = np.random.choice(K, p=prob_table[len(h) - 2, :])
+            pos = h.index((gender, age))
+            susceptibles_ages = [x[1] for idx, x in enumerate(h) if idx != pos]
+            new_infected = np.random.choice(susceptibles_ages, size=k, replace=False)
 
-                    pos = h.index((gender, age))
-                    susceptibles_ages = [x[1] for idx, x in enumerate(h) if idx != pos]
-                    new_infected = np.random.choice(susceptibles_ages, size=k, replace=False)
+            for new_one in new_infected:
+                output[i, new_one] += 1
 
-                    for new_one in new_infected:
-                        output[i, new_one] += 1
-    print(f'Check: Index cases count: {check_index_cases_count}')
-
-    check_index_cases_count_below90 = 0
-    for voy_idx, voy in enumerate(tqdm(voy_mapping.values())):
-        all_people, all_households = get_data_for_voy(voy)
-
-        voy_data = data[(data.voy == voy) & (data.age < cutoff_age)]
-
-        for n in voy_data.min_household_size.unique():
-            # print(f'n={n}')
-            households = get_households_within_habitants_range(all_households, n, household_size_max)
-            people = get_people_in_households(all_people, households)
-
-            for gender in GENDER_INDICES:
-                sources_dict = voy_data.loc[(voy_data.gender == gender) & (voy_data.min_household_size == n),
-                                            ['age', 'number_of_cases']] \
-                    .set_index('age')['number_of_cases'].to_dict()
-                check_index_cases_count_below90 += sum(sources_dict.values())
-
-                for age, number_of_cases in sources_dict.items():
-                    for i in range(num_trials):
-
-                        household_indices = random.choices(people[(gender, age)], k=number_of_cases)
-                        for household_index in household_indices:
-                            h = households[household_index]
-                            sampled_household_sizes[i, len(h) - 1] += 1
-                            if len(h) == 1:
-                                continue
-                            k = np.random.choice(K, p=prob_table[len(h) - 2, :])
-
-                            pos = h.index((gender, age))
-                            susceptibles_ages = [x[1] for idx, x in enumerate(h) if idx != pos]
-                            new_infected = np.random.choice(susceptibles_ages, size=k, replace=False)
-
-                            for new_one in new_infected:
-                                output[i, new_one] += 1
-    print(f'Check: Index cases count: {check_index_cases_count + check_index_cases_count_below90}')
-    print(f'Index cases from db: {sum(data.number_of_cases)}')
-    print(f'Number of people < 90 from db: {data[data.age < cutoff_age].number_of_cases.sum()}, '
-          f'check: {check_index_cases_count_below90}')
-
-    return output, sampled_household_sizes
 
 
 def lambda_bisection(index_cases_ages, sampled_households, max_iterations=6):
@@ -174,7 +117,7 @@ def lambda_bisection(index_cases_ages, sampled_households, max_iterations=6):
         current_lambda = (lambda_lb + lambda_ub) / 2  # this need to be in 5D
         if iteration == max_iterations:
             return current_lambda
-        output = infect(index_cases_ages, sampled_households)
+        output = infect(index_cases_ages, sampled_households, current_lambda)
 
     return inner
 
