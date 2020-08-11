@@ -1,5 +1,5 @@
 import random
-from operator import itemgetter
+from bootstrapping.infection_prob_5d import InfectionProbabilitiesCalculator
 from bisect import bisect_right
 
 import numpy as np
@@ -8,7 +8,8 @@ from tqdm import tqdm
 from bootstrapping.nsp2011 import get_households_within_habitants_range, get_data, get_data_for_voy, \
     get_people_in_households
 from bootstrapping.settings import *
-from bootstrapping.infected_dataset import (get_elderly_patient_data, get_patient_data, get_index_cases_grouped_by_age)
+from bootstrapping.infected_dataset import (get_patient_data, get_elderly_patient_data, get_index_cases_grouped_by_age,
+                                            get_known_secondary_infected_age_grouped)
 from bootstrapping import utils
 
 
@@ -84,69 +85,93 @@ def sample_households_for_index_cases(data, elderly_data, household_size_max=15,
     return index_cases_ages, sampled_households
 
 
-def get_probabilities_of_infection(l1, l2, l3, l4, l5, icag, n1, n2, n3, n4, n5):
-    return 0.0625, 0.0625, 0.125, 0.25, 0.5
+def infect(index_cases_ages, sampled_households, lambda_hat, prob_calc):
+    lambda_hat = lambda_hat.tolist()
+    sampled_households = sampled_households.astype(int)
+
+    num_trials = sampled_households.shape[0]
+    num_age_groups = sampled_households.shape[2]
+    total_infected = np.zeros((num_trials, num_age_groups), dtype=int)
+    for i in tqdm(range(num_trials)):
+
+        for j, (age_group, household) in enumerate(zip(index_cases_ages, sampled_households[i])):
+            probabilities = prob_calc.get_probabilities_of_infection(*lambda_hat, age_group, *household.tolist())
+
+            non_zero_idx = np.where(household != 0)[0]
+            for k in non_zero_idx:
+                total_infected[i, k] += sum(np.random.rand(household[k]) < probabilities[k])
+
+    return total_infected
 
 
-def infect(index_cases_ages, sampled_households, lambda_hat, num_trials=10000):
-    #
-
-    # sampled_households = np.zeros((num_trials, num_index_cases, num_age_groups))
-    #     index_cases_ages = np.zeros(num_index_cases)
-
-    lambda_hat = lambda_hat.to_list()
-
-    for i in range(num_trials):
-        for age_group, household in zip(index_cases_ages, sampled_households[i]):
-            p = get_probabilities_of_infection(*lambda_hat, age_group, *household.to_list())
-
-            k = np.random.choice(K, p=prob_table[len(h) - 2, :])
-
-            pos = h.index((gender, age))
-            susceptibles_ages = [x[1] for idx, x in enumerate(h) if idx != pos]
-            new_infected = np.random.choice(susceptibles_ages, size=k, replace=False)
-
-            for new_one in new_infected:
-                output[i, new_one] += 1
+def get_mean_infected(infected):
+    return np.mean(infected, 0)
 
 
+def lambda_bisection(index_cases_ages, sampled_households, known_secondary_infected, max_iterations=6):
+    prob_calc = InfectionProbabilitiesCalculator()
 
-def lambda_bisection(index_cases_ages, sampled_households, max_iterations=6):
-
-    def inner(lambda_lb, lambda_ub, iteration):
+    def inner(lambda_lb, lambda_ub, iteration=0):
+        """
+        5. Dla każdej grupy wiekowej sprawdzamy, czy średnia wylosowanych I/N w tej grupie wiekowej jest
+        mniejsza / większa od obserwowanej I/N w tej grupie wiekowej i w zależności od tego odpowiednio
+        zwiększamy / zmniejszamy lambdę tej grupy wiekowej.
+        :param lambda_lb: vector of lambda lower bound
+        :param lambda_ub: vector of lambda upper bound
+        :param iteration: iteration counter
+        :return: vector of estimated lambdas
+        """
         current_lambda = (lambda_lb + lambda_ub) / 2  # this need to be in 5D
+        infected = infect(index_cases_ages, sampled_households, current_lambda, prob_calc)
+        mean_infected = get_mean_infected(infected)
         if iteration == max_iterations:
-            return current_lambda
-        output = infect(index_cases_ages, sampled_households, current_lambda)
+            return current_lambda, mean_infected
+
+        next_lambda_lb = lambda_lb
+        next_lambda_ub = lambda_ub
+        for i, calculated in enumerate(mean_infected):
+            if calculated < known_secondary_infected[i]:
+                # increase lambda
+                next_lambda_lb[i] = current_lambda[i]
+            else:
+                # decrease lambda
+                next_lambda_ub[i] = current_lambda[i]
+        return inner(next_lambda_lb, next_lambda_ub, iteration + 1)
 
     return inner
 
 
-def main(subfolder, start_lambda_lb, start_lambda_ub, num_trials=10000):
-    """index_cases = get_patient_data()
+def print_results(known, lambdas, mean_infected):
+    print(f'Known secondary infected | {known[0]} | {known[1]} | {known[2]} | {known[3]} | {known[4]} |')
+    lambdas_str = [f'{l:.4f}' for l in lambdas]
+    print(f'Estimated lambda | {"| ".join(lambdas_str)} |')
+    print(f'Estimated mean | {"| ".join(str(m) for m in mean_infected)} |')
+
+
+def main(subfolder, start_lambda_lb, start_lambda_ub, age_ranges = (20, 40, 60, 80), num_trials=10000):
+
+    index_cases = get_patient_data()
     index_cases_grouped_by_age = get_index_cases_grouped_by_age(index_cases)
     elderly_grouped = get_elderly_patient_data(index_cases)
     index_cases_ages, sampled_households = sample_households_for_index_cases(
         index_cases_grouped_by_age,
         elderly_grouped,
-        num_trials=num_trials)
+        num_trials=num_trials, age_ranges=age_ranges)
     utils.dump_pickles(index_cases_ages, subfolder, 'index_cases_age_groups5d')
-    utils.dump_pickles(sampled_households, subfolder, 'sampled_households5d')"""
+    utils.dump_pickles(sampled_households, subfolder, 'sampled_households5d')
 
-    index_cases_ages = utils.load_pickles(
-        Path(r'D:\python\dark-figure\results\test2\index_cases_age_groups5d_202008092133.pickle').resolve())
-    sampled_households = utils.load_pickles(
-        Path(r'D:\python\dark-figure\results\test2\sampled_households5d_202008092133.pickle').resolve())
-    lambda_bisection_function = lambda_bisection(index_cases_ages, sampled_households)
-    result = lambda_bisection_function(start_lambda_lb, start_lambda_ub, 0)
-    utils.dump_pickles(result, subfolder, 'lambda5d')
+    known_secondary_infected = get_known_secondary_infected_age_grouped(age_ranges=age_ranges)[0]
+    lambda_bisection_function = lambda_bisection(index_cases_ages, sampled_households, known_secondary_infected)
+    lambdas, mean_infected = lambda_bisection_function(start_lambda_lb, start_lambda_ub)
+    utils.dump_pickles(lambdas, subfolder, 'lambda5d')
+    utils.dump_pickles(mean_infected, subfolder, 'mean_infected5d')
+
+    print_results(known_secondary_infected, lambdas, mean_infected)
+    return lambdas
 
 
 if __name__ == '__main__':
-    # main('test10000', num_trials=10000)
     lb = 0.05 * np.ones((5,))
     ub = 0.15 * np.ones((5,))
-    main('test2', lb, ub, num_trials=2)
-    # index_cases_ages = utils.load_pickles(Path(r'D:\python\dark-figure\results\test2\index_cases_age_groups5d_202008092133.pickle').resolve())
-    # sampled_households = utils.load_pickles(Path(r'D:\python\dark-figure\results\test2\sampled_households5d_202008092133.pickle').resolve())
+    main('test10000', lb, ub)
 
