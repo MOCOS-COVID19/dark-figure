@@ -171,7 +171,20 @@ def main(subfolder, start_lambda_lb, start_lambda_ub, age_ranges = (20, 40, 60, 
 
 
 if __name__ == '__main__':
-    lb = 0.05 * np.ones((5,))
-    ub = 0.15 * np.ones((5,))
-    main('test10000', lb, ub)
+    # lb = 0.05 * np.ones((5,))
+    #ub = 0.15 * np.ones((5,))
+    #main('test10000', lb, ub)
+    subfolder = 'test10000'
+    current_lambda = utils.load_pickles(
+        Path(r'D:\python\dark-figure\results\test10000\lambda5d_202008110214.pickle').resolve())
+    index_cases_ages = utils.load_pickles(
+        Path(r'D:\python\dark-figure\results\test10000\index_cases_age_groups5d_202008092146.pickle').resolve())
+    sampled_households = utils.load_pickles(
+        Path(r'D:\python\dark-figure\results\test10000\sampled_households5d_202008092146.pickle').resolve())
+    prob_calc = InfectionProbabilitiesCalculator()
+    infected = infect(index_cases_ages, sampled_households, current_lambda, prob_calc)
+    mean_infected = get_mean_infected(infected)
+    utils.dump_pickles(mean_infected, subfolder, 'mean_infected5d_v2')
+    infected = utils.load_pickles(Path(r'D:\python\dark-figure\results\test10000\infected_v2_202008112109.pickle').resolve())
+
 
