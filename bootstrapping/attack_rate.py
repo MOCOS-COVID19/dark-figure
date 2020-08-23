@@ -81,10 +81,10 @@ class AttackRate:
                 household_indices = random.choices(people[(gender, age)], k=num_trials)
                 for index in household_indices:
                     occurrences[:,
-                    age - age_min,
-                    gender,
-                    n - household_size_min,
-                    len(households[index]) - household_size_min] += 1
+                                age - age_min,
+                                gender,
+                                n - household_size_min,
+                                len(households[index]) - household_size_min] += 1
 
         for voy_idx, voy in enumerate(tqdm(VOYVODSHIPS, desc='Calculating young fellows')):
             all_people, all_households = get_data_for_voy(voy)
@@ -179,7 +179,8 @@ class AttackRate:
         arg = infected / susceptibles
         where = bisect_right(g_df.G, arg)
         a = (arg - g_df.loc[where - 1].G) / (g_df.loc[where].G - g_df.loc[where - 1].G)
-        lambda_hat = g_df.loc[where - 1, 'lambda'] + a * (g_df.loc[where, 'lambda'] - g_df.loc[where - 1, 'lambda'])
+        lambda_hat = float(g_df.loc[where - 1, 'lambda']) \
+                     + a * (float(g_df.loc[where, 'lambda']) - float(g_df.loc[where - 1, 'lambda']))
         return lambda_hat
 
     @staticmethod
@@ -378,9 +379,9 @@ def get_g_function_full_range():
     return g_df
 
 
-def attack_rate_calculations(patient_data_file):
+def attack_rate_calculations(age_groups=(20,40,60,80)):
     calc = AttackRate()
-    index_cases = get_patient_data(patient_data_path=patient_data_file)
+    index_cases = get_patient_data()
     print(f'Number of index cases: {len(index_cases.index)}')
     index_cases_grouped_by_age = get_index_cases_grouped_by_age(index_cases)
     elderly_grouped = get_elderly_patient_data(index_cases)
@@ -403,13 +404,12 @@ def attack_rate_calculations(patient_data_file):
                                                                              prob_table)
     print(f'Number of drawn households {sum(wielkosci_domkow[0, :])} should be equal to '
           f'the number of index cases  {len(index_cases.index)}')
-    conf_intervals = calc.get_infected_confidence_interval(sampled_households)
+    conf_intervals = calc.get_infected_confidence_interval(sampled_households, age_groups=age_groups)
     print('Confidence intervals: ', conf_intervals)
-    means = calc.get_means(sampled_households)
+    means = calc.get_means(sampled_households, age_groups=age_groups)
     print('Means of infected: ', means)
     print('Sum of means: ', sum(means))
-    print('Known secondary infected (age-grouped)', get_known_secondary_infected_age_grouped(
-        patient_data_path=patient_data_file))
+    print('Known secondary infected (age-grouped)', get_known_secondary_infected_age_grouped(age_ranges=age_groups))
 
 
 def lambda_reverse_engineering(lambda_hat, num_trials):
@@ -435,13 +435,28 @@ def get_mean_infected(infected):
     return np.mean(infected, 0)
 
 
+def get_99_quantile_infected(infected):
+    """
+
+    :param infected: num_trials x num_age_groups matrix of infected
+    :return:
+    """
+    num_trials = infected.shape[0]
+    num_age_groups = infected.shape[1]
+    idx = int(np.min((np.ceil(0.99 * num_trials), num_trials - 1)))
+    percentiles =[sorted(infected[:, i])[idx] for i in range(num_age_groups)]
+    return np.array(percentiles)
+
+
 def lambda_bisection(sampled_households, known_secondary_infected, age_ranges=(20, 40, 60, 80),
-                     max_iterations=6):
+                     max_iterations=6, decision_method=get_mean_infected):
     """
     Searches for a lambda (attack rate) that is either an upper or a lower bound for a unifrom case.
     :param sampled_households: matrix of susceptibles to attack with infection
     :param known_secondary_infected: number of known secondary infected in each age group
     :param max_iterations: maximum number of bisections to be performed
+    :param decision_method: function for calculating statistics from infected, used for decision making on the next
+    bisection
     :return: lambda bisection function
     """
     calc = AttackRate()
@@ -484,19 +499,20 @@ def lambda_bisection(sampled_households, known_secondary_infected, age_ranges=(2
         :param lambda_ub: vector of lambda upper bound
         :param bound: 'upper' or 'lower'
         :param iteration: iteration counter
-        :return: vector of estimated lambdas
+        :return: vector of estimated lambdas, statistic of infected (mean or 99-quantile depending on the decision
+        function used)
         """
         current_lambda = (lambda_lb + lambda_ub) / 2
         infected = calc.infect_susceptibles(sampled_households, current_lambda)
-        mean_bootstrapped_infected = get_mean_infected(infected)
+        infected_statistic = decision_method(infected)
         if iteration == max_iterations:
-            return current_lambda, mean_bootstrapped_infected
+            return current_lambda, infected_statistic
 
         if bound == 'lower':
-            next_lambda_lb, next_lambda_ub = lower(mean_bootstrapped_infected, known_secondary_infected_arr,
+            next_lambda_lb, next_lambda_ub = lower(infected_statistic, known_secondary_infected_arr,
                                                    lambda_lb, lambda_ub, current_lambda)
         elif bound == 'upper':
-            next_lambda_lb, next_lambda_ub = upper(mean_bootstrapped_infected, known_secondary_infected_arr,
+            next_lambda_lb, next_lambda_ub = upper(infected_statistic, known_secondary_infected_arr,
                                                    lambda_lb, lambda_ub, current_lambda)
         else:
             raise ValueError(f'Unknown bound {bound}')
@@ -514,28 +530,49 @@ def print_results(known, lower_lambda, lower_bound_infected, upper_lambda, upper
     print(f'Upper bound infected & {"& ".join(str(m) for m in upper_bound_infected)} \\\\')
 
 
-def lambda_bounds(lambda_lb, lambda_ub, age_ranges=(20, 40, 60, 80)):
+def lambda_bounds(lambda_lb, lambda_ub, decision_method=get_mean_infected, age_ranges=(20, 40, 60, 80),
+                  max_iterations=6):
     sampled_households = utils.load_pickles(
         Path(r'D:\python\dark-figure\results\test10000\sampled_households5d_202008092146.pickle').resolve())
     known_secondary_infected = get_known_secondary_infected_age_grouped(age_ranges=age_ranges)[0]
-    lambda_bisection_function = lambda_bisection(sampled_households, known_secondary_infected)
+    lambda_bisection_function = lambda_bisection(sampled_households, known_secondary_infected,
+                                                 max_iterations=max_iterations,
+                                                 decision_method=decision_method)
     lower_lambda, lower_mean_infected = lambda_bisection_function(lambda_lb, lambda_ub, 'lower')
     utils.dump_pickles(lower_lambda, 'lower_bound', 'lambdas')
     utils.dump_pickles(lower_mean_infected, 'lower_bound', 'mean_infected')
-    upper_lambda, upper_mean_infected = lambda_bisection_function(lambda_lb, lambda_ub, 'lower')
-    utils.dump_pickles(upper_lambda, 'upper_bound', 'lambdas')
-    utils.dump_pickles(upper_mean_infected, 'upper_bound', 'mean_infected')
-
+    # upper_lambda, upper_mean_infected = lambda_bisection_function(lambda_lb, lambda_ub, 'upper')
+    # utils.dump_pickles(upper_lambda, 'upper_bound', 'lambdas')
+    # utils.dump_pickles(upper_mean_infected, 'upper_bound', 'mean_infected')
+    # temporary, because i need to think about it
+    upper_lambda = lower_lambda
+    upper_mean_infected = lower_mean_infected
     print_results(known_secondary_infected, lower_lambda, lower_mean_infected, upper_lambda, upper_mean_infected)
     return lower_lambda, upper_lambda
 
 
 if __name__ == '__main__':
-    """calc = AttackRate()
-    sampled_households = calc.load_pickles(RESULTS_DIR / 'sampled_households_secondary_202007240956.pickle')
-    conf_intervals = calc.get_infected_confidence_interval(sampled_households, age_groups=(20,40,60,80))
+    # attack_rate_calculations()
+    calc = AttackRate()
+    age_groups = (20,40,60,80)
+    sampled_households = calc.load_pickles(RESULTS_DIR / 'sampled_households_secondary_202008220004.pickle')
+    conf_intervals = calc.get_infected_confidence_interval(sampled_households, age_groups=age_groups)
     print('Confidence intervals: ', conf_intervals)
-    means = calc.get_means(sampled_households, age_groups=(20,40,60,80))
-    print('Means of infected: ', means)"""
+    means = calc.get_means(sampled_households, age_groups=age_groups)
+    print('Means of infected: ', means)
+    print('Sum of means: ', sum(means))
+    known = get_known_secondary_infected_age_grouped(age_ranges=age_groups)
+    print('Known secondary infected (age-grouped)', known)
+    print(f'Known secondary infected {sum(known[0].values())} + {known[1]} of unknown age')
     # get_g_function_full_range()
-    lambda_bounds(0.05, 0.15)
+    # lambda_bounds(0.05, 0.15)
+    # lambda_bounds(0.0, 0.1, get_99_quantile_infected)
+    # calc = AttackRate()
+    # sampled_households = utils.load_pickles(
+    #     Path(r'D:\python\dark-figure\results\test10000\sampled_households5d_202008092146.pickle').resolve())
+    # lambda_bounds(0.055, 0.06, decision_method=get_99_quantile_infected, max_iterations=0)
+    # current_lambda = 0.05859375
+    # infected = calc.infect_susceptibles(sampled_households, current_lambda)
+    # infected_statistic = get_99_quantile_infected(infected)
+    # utils.dump_pickles(current_lambda, 'lower_bound', 'lambdas_sanity')
+    # utils.dump_pickles(infected_statistic, 'lower_bound', 'mean_infected_sanity')
