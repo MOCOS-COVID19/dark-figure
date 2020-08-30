@@ -5,11 +5,13 @@ import ast
 from bisect import bisect_right
 
 
+latest_patient_data_path = 'addresses_ages_rev1_20200722.csv'
+
 def string_to_list_len(x):
     return len([aa for aa in x[1:-1].split(', ') if len(aa) > 0])
 
 
-def read_clean_patient_data(patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
+def read_clean_patient_data(patient_data_path=str(data_dir / latest_patient_data_path),
                             max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE):
     patient_data = pd.read_csv(patient_data_path)
     patient_data = patient_data[~patient_data.is_dps]
@@ -24,7 +26,7 @@ def read_clean_patient_data(patient_data_path=str(data_dir / 'addresses_ages_rev
     return patient_data
 
 
-def get_patient_data(patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
+def get_patient_data(patient_data_path=str(data_dir / latest_patient_data_path),
                      max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE):
     patient_data = read_clean_patient_data(patient_data_path, max_min_household_size)
     patient_data = patient_data.rename(
@@ -40,9 +42,9 @@ def get_known_secondary_infected_count(patient_data):
     return patient_data.min_household_size.sum() - len(patient_data.index)
 
 
-def get_count_by_field(fields, patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
-                                             max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE,
-                                             age_ranges=(40, 60, 80)):
+def get_count_by_field(fields, patient_data_path=str(data_dir / latest_patient_data_path),
+                       max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE,
+                       age_ranges=(40, 60, 80)):
     infected_by_age_group = defaultdict(int)
     unknown_age = 0
     patient_data = read_clean_patient_data(patient_data_path, max_min_household_size)
@@ -64,7 +66,7 @@ def get_count_by_field(fields, patient_data_path=str(data_dir / 'addresses_ages_
     return infected_by_age_group, unknown_age
 
 
-def get_known_secondary_infected_age_grouped(patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
+def get_known_secondary_infected_age_grouped(patient_data_path=str(data_dir / latest_patient_data_path),
                                              max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE,
                                              age_ranges=(40, 60, 80)):
     return get_count_by_field(['later_ages_in_address'], patient_data_path, max_min_household_size, age_ranges)
@@ -107,15 +109,21 @@ def get_elderly_patient_data(index_cases, cutoff_age=90):
     return elderly_grouped
 
 
-def get_severe_10_age_grouped(patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
+def get_severe_10_age_grouped(patient_data_path=str(data_dir / latest_patient_data_path),
                   max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE, age_ranges=(40,60,80)):
     return get_count_by_field(['later_ages_in_address_severe10', 'later_ages_in_address_deaths'],
                               patient_data_path, max_min_household_size, age_ranges)
 
 
-def get_severe_14_age_grouped(patient_data_path=str(data_dir / 'addresses_ages_rev2_20200701.csv'),
+def get_severe_14_age_grouped(patient_data_path=str(data_dir / latest_patient_data_path),
                   max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE, age_ranges=(40,60,80)):
     return get_count_by_field(['later_ages_in_address_severe14', 'later_ages_in_address_deaths'],
+                              patient_data_path, max_min_household_size, age_ranges)
+
+
+def get_dead_age_grouped(patient_data_path=str(data_dir / latest_patient_data_path),
+                         max_min_household_size=DEFAULT_MAX_MIN_HOUSEHOLD_SIZE, age_ranges=(40,60,80)):
+    return get_count_by_field(['later_ages_in_address_deaths'],
                               patient_data_path, max_min_household_size, age_ranges)
 
 
