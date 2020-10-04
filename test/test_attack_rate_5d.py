@@ -60,4 +60,5 @@ class TestAttackRate(TestCase):
         self.assertEqual(5, len(result))
         self.assertEqual(990, result[0])
         self.assertEqual(990, result[3])
+        print(result)
 

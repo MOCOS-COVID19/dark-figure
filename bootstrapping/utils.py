@@ -1,7 +1,7 @@
 import pickle
 from datetime import datetime
 from pathlib import Path
-import pandas as pd
+import numpy as np
 from typing import Any, Optional
 
 from bootstrapping.settings import RESULTS_DIR
@@ -22,14 +22,14 @@ def dump_pickles(data: Any, subfolder: str, file_part: str) -> Optional[Path]:
         return None
 
 
-def dump_pandas(data: pd.DataFrame, subfolder: str, file_part: str) -> Path:
+def dump_ndarray(data: np.ndarray, subfolder: str, file_part: str) -> Optional[Path]:
     dt = datetime.now().strftime('%Y%m%d%H%M')
-    file_pattern = f'{{}}_{dt}.csv'
+    file_pattern = f'{{}}_{dt}.dat'
     if not (RESULTS_DIR / subfolder).is_dir():
         (RESULTS_DIR / subfolder).mkdir()
     file_path = (RESULTS_DIR / subfolder / file_pattern.format(file_part))
     try:
-        data.to_csv(file_path)
+        np.save(file_path.open('wb'), data, allow_pickle=False)
         return file_path
     except Exception as e:
         print(f'Could not save data {file_part} due to {str(e)}')

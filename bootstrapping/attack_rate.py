@@ -506,7 +506,7 @@ def lambda_bisection(sampled_households, known_secondary_infected, age_ranges=(2
         infected = calc.infect_susceptibles(sampled_households, current_lambda)
         infected_statistic = decision_method(infected)
         if iteration == max_iterations:
-            return current_lambda, infected_statistic
+            return current_lambda, infected_statistic, infected
 
         if bound == 'lower':
             next_lambda_lb, next_lambda_ub = lower(infected_statistic, known_secondary_infected_arr,
@@ -522,38 +522,35 @@ def lambda_bisection(sampled_households, known_secondary_infected, age_ranges=(2
     return inner
 
 
-def print_results(known, lower_lambda, lower_bound_infected, upper_lambda, upper_bound_infected):
+def print_results(known, lower_lambda, lower_bound_infected):
     print(f'Known secondary infected & {known[0]} & {known[1]} & {known[2]} & {known[3]} & {known[4]} \\\\')
     print(f'Lower bound $\\lambda$ &  {lower_lambda} \\\\')
     print(f'Lower bound infected & {"& ".join(str(m) for m in lower_bound_infected)} \\\\')
-    print(f'Upper bound $\\lambda$ &  {upper_lambda} \\\\')
-    print(f'Upper bound infected & {"& ".join(str(m) for m in upper_bound_infected)} \\\\')
 
 
-def lambda_bounds(lambda_lb, lambda_ub, decision_method=get_mean_infected, age_ranges=(20, 40, 60, 80),
-                  max_iterations=6):
-    sampled_households = utils.load_pickles(
-        Path(r'D:\python\dark-figure\results\test10000\sampled_households5d_202008092146.pickle').resolve())
+def lambda_bounds(sampled_households, lambda_lb, lambda_ub, decision_method=get_mean_infected,
+                  age_ranges=(20, 40, 60, 80), max_iterations=6):
+
     known_secondary_infected = get_known_secondary_infected_age_grouped(age_ranges=age_ranges)[0]
     lambda_bisection_function = lambda_bisection(sampled_households, known_secondary_infected,
                                                  max_iterations=max_iterations,
                                                  decision_method=decision_method)
-    lower_lambda, lower_mean_infected = lambda_bisection_function(lambda_lb, lambda_ub, 'lower')
+    lower_lambda, lower_mean_infected, infected = lambda_bisection_function(lambda_lb, lambda_ub, 'lower')
     utils.dump_pickles(lower_lambda, 'lower_bound', 'lambdas')
     utils.dump_pickles(lower_mean_infected, 'lower_bound', 'mean_infected')
-    # upper_lambda, upper_mean_infected = lambda_bisection_function(lambda_lb, lambda_ub, 'upper')
-    # utils.dump_pickles(upper_lambda, 'upper_bound', 'lambdas')
-    # utils.dump_pickles(upper_mean_infected, 'upper_bound', 'mean_infected')
-    # temporary, because i need to think about it
-    upper_lambda = lower_lambda
-    upper_mean_infected = lower_mean_infected
-    print_results(known_secondary_infected, lower_lambda, lower_mean_infected, upper_lambda, upper_mean_infected)
-    return lower_lambda, upper_lambda
+    utils.dump_ndarray(infected, 'lower_bound', 'infected')
+
+    print_results(known_secondary_infected, lower_lambda, lower_mean_infected)
+    return lower_lambda, infected
 
 
 if __name__ == '__main__':
+    print('Attack rate')
+    # CASE 1: ALL STUFF
     # attack_rate_calculations()
-    calc = AttackRate()
+
+    # CASE 2: Given sampled households, retrieve the rest
+    """calc = AttackRate()
     age_groups = (20,40,60,80)
     sampled_households = calc.load_pickles(RESULTS_DIR / 'sampled_households_secondary_202008220004.pickle')
     conf_intervals = calc.get_infected_confidence_interval(sampled_households, age_groups=age_groups)
@@ -564,15 +561,19 @@ if __name__ == '__main__':
     known = get_known_secondary_infected_age_grouped(age_ranges=age_groups)
     print('Known secondary infected (age-grouped)', known)
     print(f'Known secondary infected {sum(known[0].values())} + {known[1]} of unknown age')
+    """
+
+    # CASE 3: G function
     # get_g_function_full_range()
-    # lambda_bounds(0.05, 0.15)
-    # lambda_bounds(0.0, 0.1, get_99_quantile_infected)
-    # calc = AttackRate()
-    # sampled_households = utils.load_pickles(
-    #     Path(r'D:\python\dark-figure\results\test10000\sampled_households5d_202008092146.pickle').resolve())
-    # lambda_bounds(0.055, 0.06, decision_method=get_99_quantile_infected, max_iterations=0)
-    # current_lambda = 0.05859375
-    # infected = calc.infect_susceptibles(sampled_households, current_lambda)
-    # infected_statistic = get_99_quantile_infected(infected)
-    # utils.dump_pickles(current_lambda, 'lower_bound', 'lambdas_sanity')
-    # utils.dump_pickles(infected_statistic, 'lower_bound', 'mean_infected_sanity')
+
+    # CASE 4: uniform lambda lower bound and confidence intervals
+    """sampled_households = np.load(
+        Path(r'D:\python\dark-figure\results\test10000_20200824\sampled_households5d_202008241157.dat').resolve(),
+        allow_pickle=False)
+    lower_bound, infected = lambda_bounds(sampled_households, 0.04, 0.07, decision_method=get_99_quantile_infected)
+    infected_statistic = get_99_quantile_infected(infected)
+    utils.dump_pickles(lower_bound, 'lower_bound', 'lambdas_sanity')
+    utils.dump_pickles(infected_statistic, 'lower_bound', 'mean_infected_sanity')
+    print(lower_bound)
+    print(infected_statistic)"""
+

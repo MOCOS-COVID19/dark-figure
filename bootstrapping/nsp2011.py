@@ -6,7 +6,28 @@ import pandas as pd
 from .settings import data_dir
 
 
-def get_data():
+def _recalculate_data(nsp_folder):
+    all_people = defaultdict(list)
+    all_households = defaultdict(list)
+
+    for folder in nsp_folder.iterdir():
+        population_voy = pd.read_csv(str(folder / 'population.csv'))
+        for idx, row in population_voy.iterrows():
+            all_people[(row.gender, row.age)].append(row.household_index)
+            all_households[row.household_index].append((row.gender, row.age))
+
+    with (data_dir / 'all_people.pickle').open('wb') as handle:
+        pickle.dump(all_people, handle)
+
+    with (data_dir / 'all_households.pickle').open('wb') as handle:
+        pickle.dump(all_households, handle)
+    return all_people, all_households
+
+
+def get_data(recalculate=False, nsp_folder = data_dir / 'nsp'):
+
+    if recalculate:
+        return _recalculate_data(nsp_folder)
     try:
         with (data_dir / 'all_people.pickle').open('rb') as handle:
             all_people = pickle.load(handle)
@@ -14,25 +35,12 @@ def get_data():
         with (data_dir / 'all_households.pickle').open('rb') as handle:
             all_households = pickle.load(handle)
 
+        return all_people, all_households
+
     except FileNotFoundError:
-        all_people = defaultdict(list)
-        all_households = defaultdict(list)
+        return _recalculate_data(nsp_folder)
 
-        nsp_folder = data_dir / 'nsp'
 
-        for folder in nsp_folder.iterdir():
-            population_voy = pd.read_csv(str(folder / 'population.csv'))
-            for idx, row in population_voy.iterrows():
-                all_people[(row.gender, row.age)].append(row.household_index)
-                all_households[row.household_index].append((row.gender, row.age))
-
-        with (data_dir / 'all_people.pickle').open('wb') as handle:
-            pickle.dump(all_people, handle)
-
-        with (data_dir / 'all_households.pickle').open('wb') as handle:
-            pickle.dump(all_households, handle)
-
-    return all_people, all_households
 
 
 def get_data_for_voy(voy):

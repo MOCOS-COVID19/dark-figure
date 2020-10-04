@@ -5,6 +5,7 @@ from bisect import bisect_right
 import numpy as np
 from tqdm import tqdm
 
+from bootstrapping.attack_rate import get_99_quantile_infected
 from bootstrapping.nsp2011 import get_households_within_habitants_range, get_data, get_data_for_voy, \
     get_people_in_households
 from bootstrapping.settings import *
@@ -125,7 +126,7 @@ def lambda_bisection(index_cases_ages, sampled_households, known_secondary_infec
         infected = infect(index_cases_ages, sampled_households, current_lambda, prob_calc)
         mean_infected = get_mean_infected(infected)
         if iteration == max_iterations:
-            return current_lambda, mean_infected
+            return current_lambda, infected, mean_infected
 
         next_lambda_lb = lambda_lb
         next_lambda_ub = lambda_ub
@@ -158,12 +159,13 @@ def main(subfolder, start_lambda_lb, start_lambda_ub, age_ranges = (20, 40, 60, 
         elderly_grouped,
         num_trials=num_trials, age_ranges=age_ranges)
     utils.dump_pickles(index_cases_ages, subfolder, 'index_cases_age_groups5d')
-    utils.dump_pandas(sampled_households, subfolder, 'sampled_households5d')
+    utils.dump_ndarray(sampled_households, subfolder, 'sampled_households5d')
 
     known_secondary_infected = get_known_secondary_infected_age_grouped(age_ranges=age_ranges)[0]
     lambda_bisection_function = lambda_bisection(index_cases_ages, sampled_households, known_secondary_infected)
-    lambdas, mean_infected = lambda_bisection_function(start_lambda_lb, start_lambda_ub)
+    lambdas, infected, mean_infected = lambda_bisection_function(start_lambda_lb, start_lambda_ub)
     utils.dump_pickles(lambdas, subfolder, 'lambda5d')
+    utils.dump_ndarray(infected, subfolder, 'infected')
     utils.dump_pickles(mean_infected, subfolder, 'mean_infected5d')
 
     print_results(known_secondary_infected, lambdas, mean_infected)
@@ -173,19 +175,4 @@ def main(subfolder, start_lambda_lb, start_lambda_ub, age_ranges = (20, 40, 60, 
 if __name__ == '__main__':
     lb = 0.05 * np.ones((5,))
     ub = 0.15 * np.ones((5,))
-    main('test10000_20200822', lb, ub)
-    """subfolder = 'test10000_20200822'
-    current_lambda = utils.load_pickles(
-        Path(r'D:\python\dark-figure\results\test10000\lambda5d_202008110214.pickle').resolve())
-    index_cases_ages = utils.load_pickles(
-        Path(r'D:\python\dark-figure\results\test10000\index_cases_age_groups5d_202008092146.pickle').resolve())
-    sampled_households = utils.load_pickles(
-        Path(r'D:\python\dark-figure\results\test10000\sampled_households5d_202008092146.pickle').resolve())
-    prob_calc = InfectionProbabilitiesCalculator()
-    infected = infect(index_cases_ages, sampled_households, current_lambda, prob_calc)
-    mean_infected = get_mean_infected(infected)
-    utils.dump_pickles(mean_infected, subfolder, 'mean_infected5d_v2')
-    infected = utils.load_pickles(Path(r'D:\python\dark-figure\results\test10000\infected_v2_202008112109.pickle').resolve())|"""
-
-
-
+    main('test10000_20200824', lb, ub)
